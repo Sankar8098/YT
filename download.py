@@ -1,31 +1,27 @@
-import yt_dlp
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
+from pytubefix.query import Stream
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def get_video_info(url):
-    ydl_opts = {
-        'format': 'best',
-        'quiet': True,
+    yt = YouTube(url)
+    formats = yt.streams.filter(type="video", mime_type="video/mp4").order_by('resolution')
+    formats = list({format_.resolution: format_ for format_ in formats}.values())
+    return {
+        'title': yt.title,
+        'uploader': yt.author,
+        'channel_url': yt.channel_url,
+        'thumbnail': yt.thumbnail_url,
+        'subtitles': yt.captions,
+        'formats': formats
     }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)
-            video_info = {
-                'title': info_dict.get('title', None),
-                'description': info_dict.get('description', None),
-                'duration': info_dict.get('duration', None),
-                'view_count': info_dict.get('view_count', None),
-                'like_count': info_dict.get('like_count', None),
-                'dislike_count': info_dict.get('dislike_count', None),
-                'upload_date': info_dict.get('upload_date', None),
-                'uploader': info_dict.get('uploader', None),
-                'channel_id': info_dict.get('channel_id', None),
-                'channel_url': info_dict.get('channel_url', None),
-                'tags': info_dict.get('tags', None),
-                'thumbnail': info_dict.get('thumbnail', None),
-                'video_url': info_dict.get('webpage_url', None),
-                'formats': info_dict.get('formats', [])
-            }
-            return video_info
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
+
+
+if __name__ == '__main__':
+    get_info = get_video_info("https://youtu.be/bPjIeKmvY4A?si=jjiUamTzMwMPnkga")
+    for format_ in get_info['formats']:
+        print(format_)
+

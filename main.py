@@ -1,16 +1,20 @@
 import asyncio
 import logging
 import sys
-import yt_dlp
 import os
 
 from environs import Env
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
+from io import BytesIO
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 from aiogram import Bot, Dispatcher, html, F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
-from aiogram.types import Message, FSInputFile
+from aiogram.methods import SendVideo
+from aiogram.types import Message, FSInputFile, InputFile, InputMediaVideo, BufferedInputFile
 from aiogram.utils.chat_action import ChatActionSender
 
 from download import get_video_info
@@ -62,19 +66,45 @@ async def getlink_handler(message: Message) -> None:
         return
 
     formats = video_info['formats']
-    formats = [format_ for format_ in formats if
-               'filesize' in format_ and format_['filesize'] is not None and format_['ext'] == 'mp4' and format_[
-                   'height'] >= 480]
-    video_formats_text = ''
-    for format_ in formats:
-        video_formats_text += f"⚡️<code>{format_['format_note']}: {format_['filesize'] / 1024 / 1024:.2f} MB</code>\n"
 
     caption_text = (f"📹 {video_info['title']}\n"
                     f"👤 <a href='{video_info['channel_url']}'>@{video_info['uploader']}</a>\n\n"
-                    f"{video_formats_text}\n\n"
-                    f"Download formats ↓")
+                    f"📥 Download formats:\n\n")
 
     await message.answer_photo(video_info['thumbnail'], caption=caption_text, reply_markup=format_kb(formats))
+
+
+@dp.callback_query(F.data == "format_thumbnail")
+async def thumbnail_callback_handler(query: types.CallbackQuery) -> None:
+    await query.message.delete()
+    await query.message.answer_photo(video_info['thumbnail'],
+                                     caption=f"📹 {video_info['title']}\n\nThumbnail downloaded by @mega_youtube_downloader_bot")
+
+
+@dp.callback_query(F.data == "format_audio")
+async def audio_callback_handler(query: types.CallbackQuery) -> None:
+    await query.message.delete()
+    loading = await query.message.answer("⚠️ Video size is large. Please wait for a while. \n\nDownloading...")
+
+    try:
+        video = YouTube(link, on_progress_callback=on_progress)
+        stream = video.streams.get_audio_only()
+        stream.download(output_path="downloads", mp3=True)
+        audio_buffer = open(f"downloads/{video.title}.mp3", "rb")
+        audio_file = BufferedInputFile(audio_buffer.read(), filename=f"{video.title}.mp4")
+        await loading.delete()
+        async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_audio"):
+            await bot.send_audio(chat_id=query.from_user.id, audio=audio_file,
+                                 caption=f"🎵 {video.title} \n\nAudio downloaded by @mega_youtube_downloader_bot")
+        audio_buffer.close()
+        os.remove(f"downloads/{video.title}.mp3")
+
+    except Exception as e:
+        try:
+            await loading.delete()
+        except Exception as e_delete:
+            print(f"Error deleting loading message: {str(e_delete)}")
+        await query.message.answer(f"❌ An error occurred: {str(e).replace('<', '&lt;').replace('>', '&gt;')}")
 
 
 @dp.callback_query(F.data.startswith("format_"))
@@ -83,37 +113,25 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
     await query.message.delete()
     loading = await query.message.answer("⚠️ Video size is large. Please wait for a while. \n\nDownloading...")
 
-    ydl_opts = {
-        'format': format_id,
-        'outtmpl': 'output/video/%(title)s.%(ext)s',
-        'quiet': True,
-    }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([link])
-            info_dict = ydl.extract_info(link)
-            title = ydl.prepare_filename(info_dict).split('/')[-1]  # Get only the filename
-            file_path = f'output/video/{title}'
-
-            if os.path.exists(file_path):
-                await loading.delete()
-                try:
-                    video = FSInputFile(file_path)
-                    async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_video"):
-                        await query.message.answer_video(video=video,
-                                                         caption=f"📹 {video_info['title']}\n👤 <a href='{video_info['channel_url']}'>@{video_info['uploader']}</a> \n\n"
-                                                                 f"📥 video downloaded by @mega_youtube_downloader_bot")
-                except Exception as e:
-                    logging.error(f"Error: {e}")
-                    await query.message.answer("Error: Failed to send the video.")
-                os.remove(file_path)
-            else:
-                await loading.delete()
-                await query.message.answer("Error: Video file not found.")
-    except Exception as e:
-        logging.error(f"Error: {e}")
+        video = YouTube(link, on_progress_callback=on_progress)
+        stream = video.streams.get_by_itag(int(format_id))
+        stream.download(output_path="downloads")
+        video_buffer = open(f"downloads/{video.title}.mp4", "rb")
+        video_file = BufferedInputFile(video_buffer.read(), filename=f"{video.title}.mp4")
         await loading.delete()
-        await query.message.answer("Error: Failed to download or send the video.")
+        async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_video"):
+            await bot.send_video(chat_id=query.from_user.id, video=video_file,
+                                 caption=f"📹 {video.title} \n\nVideo downloaded by @mega_youtube_downloader_bot")
+        video_buffer.close()
+        os.remove(f"downloads/{video.title}.mp4")
+
+    except Exception as e:
+        try:
+            await loading.delete()
+        except Exception as e_delete:
+            print(f"Error deleting loading message: {str(e_delete)}")
+        await query.message.answer(f"❌ An error occurred: {str(e).replace('<', '&lt;').replace('>', '&gt;')}")
 
 
 async def main() -> None:

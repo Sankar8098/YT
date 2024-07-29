@@ -1,21 +1,18 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 admin_statistic_btn_text = "📊 Statistic"
 
 
 def format_kb(formats: list):
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"🎞 {format_['format_note']}: {format_['filesize'] / 1024 / 1024:.2f} MB",
-                    callback_data=f"format_{format_['format_id']}"
-                )
-            ]
-            for format_ in formats
-        ]
-    )
-    return kb
+    builder = InlineKeyboardBuilder()
+    for format_ in formats:
+        builder.button(text=f"🎞 {format_.resolution}", callback_data=f"format_{format_.itag}")
+
+    builder.button(text="🔊 Audio", callback_data="format_audio")
+    builder.button(text="🖼 Thumbnail", callback_data="format_thumbnail")
+    builder.adjust(2)
+    return builder.as_markup()
 
 
 admin_kb = ReplyKeyboardMarkup(
