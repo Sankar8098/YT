@@ -8,7 +8,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 def get_video_info(url):
     yt = YouTube(url)
-    formats = yt.streams.filter(type="video", mime_type="video/mp4").order_by('resolution')
+    formats = yt.streams.filter(type="video", mime_type="video/mp4", progressive=True).order_by('resolution')
     formats = list({format_.resolution: format_ for format_ in formats}.values())
     return {
         'title': yt.title,

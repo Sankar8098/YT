@@ -77,8 +77,8 @@ async def getlink_handler(message: Message) -> None:
 @dp.callback_query(F.data == "format_thumbnail")
 async def thumbnail_callback_handler(query: types.CallbackQuery) -> None:
     await query.message.delete()
-    await query.message.answer_photo(video_info['thumbnail'],
-                                     caption=f"📹 {video_info['title']}\n\nThumbnail downloaded by @mega_youtube_downloader_bot")
+    await query.message.answer_document(video_info['thumbnail'],
+                                        caption=f"📹 {video_info['title']}\n\nThumbnail downloaded by @mega_youtube_downloader_bot")
 
 
 @dp.callback_query(F.data == "format_audio")
@@ -89,15 +89,15 @@ async def audio_callback_handler(query: types.CallbackQuery) -> None:
     try:
         video = YouTube(link, on_progress_callback=on_progress)
         stream = video.streams.get_audio_only()
-        stream.download(output_path="downloads", mp3=True)
-        audio_buffer = open(f"downloads/{video.title}.mp3", "rb")
-        audio_file = BufferedInputFile(audio_buffer.read(), filename=f"{video.title}.mp4")
+        audio_buffer = BytesIO()
+        stream.stream_to_buffer(audio_buffer)
+        audio_buffer.seek(0)
+        audio_file = BufferedInputFile(audio_buffer.read(), filename=f"{video.title}.mp3")
         await loading.delete()
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_audio"):
             await bot.send_audio(chat_id=query.from_user.id, audio=audio_file,
                                  caption=f"🎵 {video.title} \n\nAudio downloaded by @mega_youtube_downloader_bot")
         audio_buffer.close()
-        os.remove(f"downloads/{video.title}.mp3")
 
     except Exception as e:
         try:
@@ -116,16 +116,15 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
     try:
         video = YouTube(link, on_progress_callback=on_progress)
         stream = video.streams.get_by_itag(int(format_id))
-        stream.download(output_path="downloads")
-        video_buffer = open(f"downloads/{video.title}.mp4", "rb")
+        video_buffer = BytesIO()
+        stream.stream_to_buffer(video_buffer)
+        video_buffer.seek(0)
         video_file = BufferedInputFile(video_buffer.read(), filename=f"{video.title}.mp4")
         await loading.delete()
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_video"):
             await bot.send_video(chat_id=query.from_user.id, video=video_file,
                                  caption=f"📹 {video.title} \n\nVideo downloaded by @mega_youtube_downloader_bot")
         video_buffer.close()
-        os.remove(f"downloads/{video.title}.mp4")
-
     except Exception as e:
         try:
             await loading.delete()
