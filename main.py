@@ -7,14 +7,13 @@ from environs import Env
 from pytubefix import YouTube
 from pytubefix.cli import on_progress
 from io import BytesIO
-from moviepy.editor import VideoFileClip, AudioFileClip
 
 from aiogram import Bot, Dispatcher, html, F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.methods import SendVideo
-from aiogram.types import Message, FSInputFile, InputFile, InputMediaVideo, BufferedInputFile
+from aiogram.types import Message, BufferedInputFile
 from aiogram.utils.chat_action import ChatActionSender
 
 from download import get_video_info
@@ -42,6 +41,15 @@ async def command_start_handler(message: Message) -> None:
     if created:
         for admin in ADMINS:
             await bot.send_message(admin, f"New user: {message.from_user.full_name} ({message.chat.id})")
+
+
+@dp.message(Command("dev"))
+async def command_dev_handler(message: Message) -> None:
+    await message.answer("👨‍💻 Developer: @QuvonchbekDev \n"
+                         "📧 Email: hi@moorfo.uz \n"
+                         "🌐 Website: https://moorfo.uz \n"
+                         "📱 Telegram: @QuvonchbekDev \n"
+                         "📱 Instagram: @moorfo.uz")
 
 
 @dp.message(F.text == admin_statistic_btn_text)
@@ -138,6 +146,11 @@ async def main() -> None:
     db.create_tables([User])
     migrate_db()
     db.close()
+    await bot.delete_webhook()
+    await bot.set_my_commands([
+        types.BotCommand(command="/start", description="Start the bot"),
+        types.BotCommand(command="/dev", description="Developer information")
+    ])
     await dp.start_polling(bot)
 
 
