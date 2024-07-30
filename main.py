@@ -19,7 +19,7 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from download import get_video_info
 from keyboards import format_kb, admin_kb, admin_statistic_btn_text
-from db import User, db
+from db import User, db, migrate_db
 
 env = Env()
 env.read_env()
@@ -136,6 +136,7 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
 async def main() -> None:
     db.connect()
     db.create_tables([User])
+    migrate_db()
     db.close()
     await dp.start_polling(bot)
 
