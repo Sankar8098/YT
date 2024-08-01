@@ -1,6 +1,4 @@
 from pytubefix import YouTube
-from pytubefix.cli import on_progress
-from pytubefix.query import Stream
 import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context

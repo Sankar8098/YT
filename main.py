@@ -1,19 +1,18 @@
 import asyncio
 import logging
 import sys
-import os
 
 from environs import Env
-from pytubefix import YouTube
+from pytubefix import YouTube, CaptionQuery
 from pytubefix.cli import on_progress
 from io import BytesIO
+
 
 from aiogram import Bot, Dispatcher, html, F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command, StateFilter
-from aiogram.methods import SendVideo
-from aiogram.types import Message, BufferedInputFile
+from aiogram.types import Message, BufferedInputFile, URLInputFile
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.context import FSMContext
 
@@ -90,8 +89,14 @@ async def getlink_handler(message: Message) -> None:
 @dp.callback_query(F.data == "format_thumbnail")
 async def thumbnail_callback_handler(query: types.CallbackQuery) -> None:
     await query.message.delete()
-    await query.message.answer_document(video_info['thumbnail'],
-                                        caption=f"📹 {video_info['title']}\n\nThumbnail downloaded by @mega_youtube_downloader_bot")
+    await query.message.answer_document(
+        document=URLInputFile(
+            url=video_info['thumbnail'],
+            filename=f"{video_info['title']}.jpg"
+        ),
+        caption=f"📹 {video_info['title']}\n\nThumbnail downloaded by @mega_youtube_downloader_bot",
+        thumbnail=URLInputFile(video_info['thumbnail'])
+    )
 
 
 @dp.callback_query(F.data == "format_audio")
@@ -108,8 +113,12 @@ async def audio_callback_handler(query: types.CallbackQuery) -> None:
         audio_file = BufferedInputFile(audio_buffer.read(), filename=f"{video.title}.mp3")
         await loading.delete()
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_audio"):
-            await bot.send_audio(chat_id=query.from_user.id, audio=audio_file,
-                                 caption=f"🎵 {video.title} \n\nAudio downloaded by @mega_youtube_downloader_bot")
+            await bot.send_audio(
+                chat_id=query.from_user.id, audio=audio_file,
+                caption=f"🎵 {video.title} \n\nAudio downloaded by @mega_youtube_downloader_bot",
+                thumbnail=URLInputFile(video_info['thumbnail']),
+                title=video.title, performer=video_info['uploader']
+            )
         audio_buffer.close()
 
     except Exception as e:
@@ -135,8 +144,14 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
         video_file = BufferedInputFile(video_buffer.read(), filename=f"{video.title}.mp4")
         await loading.delete()
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_video"):
-            await bot.send_video(chat_id=query.from_user.id, video=video_file,
-                                 caption=f"📹 {video.title} \n\nVideo downloaded by @mega_youtube_downloader_bot")
+            await bot.send_video(
+                chat_id=query.from_user.id,
+                video=video_file,
+                caption=f"📹 {video.title} \n\nVideo downloaded by @mega_youtube_downloader_bot",
+                thumbnail=URLInputFile(video_info['thumbnail']),
+                width=stream.width,
+                supports_streaming=True
+            )
         video_buffer.close()
     except Exception as e:
         try:
@@ -187,7 +202,8 @@ async def send_confirm_handler(query: types.CallbackQuery, state: FSMContext) ->
         users = User.select().count()
         inactive_users = User.select().where(User.is_active == False).count()
         active_users = User.select().where(User.is_active == True).count()
-        await query.message.answer(f"✅ Message sent to all users. \n\nUsers: {users} \nActive users: {active_users} \nInactive users: {inactive_users}")
+        await query.message.answer(
+            f"✅ Message sent to all users. \n\nUsers: {users} \nActive users: {active_users} \nInactive users: {inactive_users}")
     else:
         await query.message.delete()
     await state.clear()
