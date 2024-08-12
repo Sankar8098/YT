@@ -24,8 +24,8 @@ from states import SendMessages
 env = Env()
 env.read_env()
 
-TOKEN = env.str("BOT_TOKEN")
-ADMINS = env.list("ADMINS")
+TOKEN = env.str("6750957059:AAH7FksN3gbQm3idSqP3B9eK_0_JpDnI0cs")
+ADMINS = env.list("5821871362")
 
 dp = Dispatcher()
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
