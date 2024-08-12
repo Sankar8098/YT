@@ -1,12 +1,7 @@
 import asyncio
 import logging
 import sys
-
-from environs import Env
-from pytubefix import YouTube, CaptionQuery
-from pytubefix.cli import on_progress
 from io import BytesIO
-
 
 from aiogram import Bot, Dispatcher, html, F, types
 from aiogram.client.default import DefaultBotProperties
@@ -15,22 +10,27 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.types import Message, BufferedInputFile, URLInputFile
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.context import FSMContext
+from environs import Env
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
 
 from download import get_video_info
 from keyboards import format_kb, admin_kb, admin_confirm_kb, admin_statistic_btn_text, admin_send_btn_text
 from db import User, db, migrate_db
 from states import SendMessages
 
+# Load environment variables
 env = Env()
 env.read_env()
 
-TOKEN = env.str("6750957059:AAH7FksN3gbQm3idSqP3B9eK_0_JpDnI0cs")
-ADMINS = env.list("5821871362")
+# Initialize bot and dispatcher
+TOKEN = env.str("BOT_TOKEN")
+ADMINS = env.list("ADMINS")
 
-dp = Dispatcher()
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
 
-
+# Command: /start
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
     await message.answer(f"Hello, {html.bold(message.from_user.full_name)}!\n\nSend me a link to the YouTube video.")
@@ -45,7 +45,7 @@ async def command_start_handler(message: Message) -> None:
         for admin in ADMINS:
             await bot.send_message(admin, f"New user: {message.from_user.full_name} ({message.chat.id})")
 
-
+# Command: /dev
 @dp.message(Command("dev"))
 async def command_dev_handler(message: Message) -> None:
     await message.answer("👨‍💻 Developer: @QuvonchbekDev \n"
@@ -54,7 +54,7 @@ async def command_dev_handler(message: Message) -> None:
                          "📱 Telegram: @QuvonchbekDev \n"
                          "📱 Instagram: @moorfo.uz")
 
-
+# Admin statistics handler
 @dp.message(F.text == admin_statistic_btn_text)
 async def admin_statistic_handler(message: Message) -> None:
     if str(message.chat.id) not in ADMINS:
@@ -64,11 +64,10 @@ async def admin_statistic_handler(message: Message) -> None:
     active_users = User.select().where(User.is_active == True).count()
     await message.answer(f"📊 Statistic\n\n Users: {users} \n Active users: {active_users}")
 
-
+# Handle YouTube links
 @dp.message(F.text.startswith("https://youtu"))
 async def getlink_handler(message: Message) -> None:
-    global link
-    global video_info
+    global link, video_info
     link = message.text
     video_info = get_video_info(link)
     await message.delete()
@@ -78,14 +77,13 @@ async def getlink_handler(message: Message) -> None:
         return
 
     formats = video_info['formats']
-
     caption_text = (f"📹 {video_info['title']}\n"
                     f"👤 <a href='{video_info['channel_url']}'>@{video_info['uploader']}</a>\n\n"
                     f"📥 Download formats:\n\n")
 
     await message.answer_photo(video_info['thumbnail'], caption=caption_text, reply_markup=format_kb(formats))
 
-
+# Callback: Download thumbnail
 @dp.callback_query(F.data == "format_thumbnail")
 async def thumbnail_callback_handler(query: types.CallbackQuery) -> None:
     await query.message.delete()
@@ -98,7 +96,7 @@ async def thumbnail_callback_handler(query: types.CallbackQuery) -> None:
         thumbnail=URLInputFile(video_info['thumbnail'])
     )
 
-
+# Callback: Download audio
 @dp.callback_query(F.data == "format_audio")
 async def audio_callback_handler(query: types.CallbackQuery) -> None:
     await query.message.delete()
@@ -112,12 +110,15 @@ async def audio_callback_handler(query: types.CallbackQuery) -> None:
         audio_buffer.seek(0)
         audio_file = BufferedInputFile(audio_buffer.read(), filename=f"{video.title}.mp3")
         await loading.delete()
+
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_audio"):
             await bot.send_audio(
-                chat_id=query.from_user.id, audio=audio_file,
+                chat_id=query.from_user.id,
+                audio=audio_file,
                 caption=f"🎵 {video.title} \n\nAudio downloaded by @mega_youtube_downloader_bot",
                 thumbnail=URLInputFile(video_info['thumbnail']),
-                title=video.title, performer=video_info['uploader']
+                title=video.title,
+                performer=video_info['uploader']
             )
         audio_buffer.close()
 
@@ -128,7 +129,7 @@ async def audio_callback_handler(query: types.CallbackQuery) -> None:
             print(f"Error deleting loading message: {str(e_delete)}")
         await query.message.answer(f"❌ An error occurred: {str(e).replace('<', '&lt;').replace('>', '&gt;')}")
 
-
+# Callback: Download video
 @dp.callback_query(F.data.startswith("format_"))
 async def format_callback_handler(query: types.CallbackQuery) -> None:
     format_id = query.data.split("_")[1]
@@ -143,6 +144,7 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
         video_buffer.seek(0)
         video_file = BufferedInputFile(video_buffer.read(), filename=f"{video.title}.mp4")
         await loading.delete()
+
         async with ChatActionSender(bot=bot, chat_id=query.from_user.id, action="upload_video"):
             await bot.send_video(
                 chat_id=query.from_user.id,
@@ -160,7 +162,7 @@ async def format_callback_handler(query: types.CallbackQuery) -> None:
             print(f"Error deleting loading message: {str(e_delete)}")
         await query.message.answer(f"❌ An error occurred: {str(e).replace('<', '&lt;').replace('>', '&gt;')}")
 
-
+# Admin send messages handler
 @dp.message(F.text == admin_send_btn_text, StateFilter(None))
 async def admin_send_handler(message: Message, state: FSMContext) -> None:
     if str(message.chat.id) not in ADMINS:
@@ -169,7 +171,7 @@ async def admin_send_handler(message: Message, state: FSMContext) -> None:
     await message.answer("📤 Send a message to users.")
     await state.set_state(SendMessages.message)
 
-
+# Handle sending messages to users
 @dp.message(SendMessages.message)
 async def send_message_handler(message: Message, state: FSMContext) -> None:
     if str(message.chat.id) not in ADMINS:
@@ -178,7 +180,7 @@ async def send_message_handler(message: Message, state: FSMContext) -> None:
     await message.answer("✅ Confirm the message.", reply_markup=admin_confirm_kb)
     await state.set_state(SendMessages.confirm)
 
-
+# Callback: Confirm sending messages
 @dp.callback_query(F.data.startswith("send_"))
 async def send_confirm_handler(query: types.CallbackQuery, state: FSMContext) -> None:
     if str(query.from_user.id) not in ADMINS:
@@ -208,7 +210,7 @@ async def send_confirm_handler(query: types.CallbackQuery, state: FSMContext) ->
         await query.message.delete()
     await state.clear()
 
-
+# Main entry point
 async def main() -> None:
     db.connect()
     db.create_tables([User])
@@ -221,7 +223,7 @@ async def main() -> None:
     ])
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     asyncio.run(main())
+
